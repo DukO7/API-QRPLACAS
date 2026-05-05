@@ -1,164 +1,154 @@
 const express = require('express');
-const mysql = require('mysql2');
+const { Pool } = require('pg'); // Cambiado de mysql2 a pg
 const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-app.use(cors({
-    origin: '*', // Permite peticiones desde cualquier lugar (incluyendo ngrok)
-    methods: ['GET', 'POST', 'PATCH', 'DELETE']
-  }));
 
-// En tu server.js, busca estas líneas y amplía el límite a 10mb o 50mb
+// --- CONFIGURACIÓN DE CORS ---
+app.use(cors({
+    origin: '*', 
+    methods: ['GET', 'POST', 'PATCH', 'DELETE']
+}));
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// --- CONFIGURACIÓN DE LA CONEXIÓN ---
-const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',      // Tu usuario de MySQL
-    password: '',      // Tu contraseña de MySQL
-    database: 'petid_db'
+// --- CONFIGURACIÓN DE LA CONEXIÓN A POSTGRESQL ---
+// Render inyecta automáticamente DATABASE_URL en las variables de entorno
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false // Obligatorio para conectar con Render
+    }
 });
 
-db.connect(err => {
+// Verificar conexión
+pool.connect((err, client, release) => {
     if (err) {
-        console.error('Error conectando a la DB:', err);
-        return;
+        return console.error('❌ Error conectando a PostgreSQL:', err.stack);
     }
-    console.log('✅ Conectado a la base de datos MySQL');
+    console.log('✅ Conectado a la base de datos PostgreSQL en Render');
+    release();
 });
 
 // --- RUTAS DE LA API ---
 
 // 1. Obtener todas las mascotas
-app.get('/api/mascotas', (req, res) => {
+app.get('/api/mascotas', async (req, res) => {
     const sql = "SELECT * FROM mascotas ORDER BY id DESC";
-    db.query(sql, (err, data) => {
-        if (err) return res.status(500).json(err);
-        return res.json(data);
-    });
+    try {
+        const result = await pool.query(sql);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json(err);
+    }
 });
 
 // 2. Registrar nueva mascota
-app.post('/api/mascotas', (req, res) => {
-    // 1. Recibimos TODOS los campos del formulario
+app.post('/api/mascotas', async (req, res) => {
     const { nombre, dueno, contacto, raza, foto, direccion } = req.body; 
-    
     const custom_id = `QRO-${Math.floor(100 + Math.random() * 900)}`;
     const fecha = new Date().toISOString().split('T')[0];
 
-    // 2. Insertamos también la dirección y la foto
-    const sql = "INSERT INTO mascotas (custom_id, nombre, dueno, contacto, raza, fecha, foto, direccion) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    const sql = `INSERT INTO mascotas (custom_id, nombre, dueno, contacto, raza, fecha, foto, direccion) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`;
     const values = [custom_id, nombre, dueno, contacto, raza, fecha, foto, direccion];
 
-    db.query(sql, values, (err, result) => {
-        if (err) {
-            console.error("Error en MySQL:", err);
-            return res.status(500).json(err);
-        }
+    try {
+        const result = await pool.query(sql, values);
         res.json({ 
-            id: result.insertId, 
+            id: result.rows[0].id, 
             custom_id, nombre, dueno, contacto, raza, fecha, foto, direccion,
-            impreso: 0, estado: 'activo' 
+            impreso: 0, estado: 'protegido' 
         });
-    });
-});
-// 3. Marcar como impreso (Cola de producción)
-app.patch('/api/mascotas/:id/impreso', (req, res) => {
-    const { id } = req.params;
-    const sql = "UPDATE mascotas SET impreso = 1 WHERE id = ?";
-    db.query(sql, [id], (err, result) => {
-        if (err) return res.status(500).json(err);
-        return res.json({ message: "Placa marcada como impresa" });
-    });
+    } catch (err) {
+        console.error("Error en Postgres:", err);
+        res.status(500).json(err);
+    }
 });
 
-// 4. Cambiar estado (Perdido/Activo)
-app.patch('/api/mascotas/:id/estado', (req, res) => {
+// 3. Marcar como impreso + Registro en historial
+app.patch('/api/mascotas/:id/impreso', async (req, res) => {
     const { id } = req.params;
-    const { estado } = req.body;
-    const sql = "UPDATE mascotas SET estado = ? WHERE id = ?";
-    db.query(sql, [estado, id], (err, result) => {
-        if (err) return res.status(500).json(err);
-        return res.json({ message: "Estado actualizado" });
-    });
+    try {
+        await pool.query("UPDATE mascotas SET impreso = 1 WHERE id = $1", [id]);
+        
+        const sqlHistorial = "INSERT INTO historial (mascota_id, evento, detalle) VALUES ($1, $2, $3)";
+        await pool.query(sqlHistorial, [id, "Producción Finalizada", "La placa fue fabricada y el QR está listo para entrega."]);
+        
+        res.json({ message: "Impreso e historial registrado" });
+    } catch (err) {
+        res.status(500).json(err);
+    }
+});
+
+// 4. Cambiar estado + Registro en historial
+app.patch('/api/mascotas/:id/estado', async (req, res) => {
+    const { id } = req.params;
+    const { estado, motivo } = req.body; 
+
+    try {
+        await pool.query("UPDATE mascotas SET estado = $1 WHERE id = $2", [estado, id]);
+        
+        const sqlHistorial = "INSERT INTO historial (mascota_id, evento, detalle) VALUES ($1, $2, $3)";
+        const detalleHistorial = motivo || `Cambio de estado a ${estado}`;
+        
+        await pool.query(sqlHistorial, [id, "Actualización de Estado", detalleHistorial]);
+        res.json({ message: "Actualizado correctamente" });
+    } catch (err) {
+        res.status(500).json(err);
+    }
 });
 
 // 5. Eliminar mascota
-app.delete('/api/mascotas/:id', (req, res) => {
+app.delete('/api/mascotas/:id', async (req, res) => {
     const { id } = req.params;
-    const sql = "DELETE FROM mascotas WHERE id = ?";
-    db.query(sql, [id], (err, result) => {
-        if (err) return res.status(500).json(err);
-        return res.json({ message: "Registro eliminado" });
-    });
+    try {
+        await pool.query("DELETE FROM mascotas WHERE id = $1", [id]);
+        res.json({ message: "Registro eliminado" });
+    } catch (err) {
+        res.status(500).json(err);
+    }
 });
 
-// RUTA EXCLUSIVA PARA INSERTAR EN HISTORIAL
-app.post('/api/historial', (req, res) => {
+// RUTA PARA INSERTAR EN HISTORIAL (GPS)
+app.post('/api/historial', async (req, res) => {
     const { mascota_id, evento, detalle } = req.body;
-    
-    console.log("Intentando insertar historial:", req.body); // Esto saldrá en tu terminal de Node
-
-    const sql = "INSERT INTO historial (mascota_id, evento, detalle) VALUES (?, ?, ?)";
-    db.query(sql, [mascota_id, evento, detalle], (err, result) => {
-        if (err) {
-            console.error("ERROR EN LA BASE DE DATOS:", err);
-            return res.status(500).json({ error: err.message });
-        }
-        console.log("✅ Registro insertado con ID:", result.insertId);
-        res.json({ message: "Historial guardado", id: result.insertId });
-    });
+    const sql = "INSERT INTO historial (mascota_id, evento, detalle) VALUES ($1, $2, $3) RETURNING id";
+    try {
+        const result = await pool.query(sql, [mascota_id, evento, detalle]);
+        res.json({ message: "Historial guardado", id: result.rows[0].id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-app.get('/api/historial/:id', (req, res) => {
+// Obtener historial de una mascota
+app.get('/api/historial/:id', async (req, res) => {
     const { id } = req.params;
-    const sql = "SELECT * FROM historial WHERE mascota_id = ? ORDER BY fecha DESC";
-    db.query(sql, [id], (err, data) => {
-        if (err) return res.status(500).json(err);
-        res.json(data);
-    });
+    const sql = "SELECT * FROM historial WHERE mascota_id = $1 ORDER BY fecha DESC";
+    try {
+        const result = await pool.query(sql, [id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json(err);
+    }
 });
 
-// 3. Marcar como impreso + REGISTRO EN HISTORIAL
-app.patch('/api/mascotas/:id/impreso', (req, res) => {
-    const { id } = req.params;
-    const sqlUpdate = "UPDATE mascotas SET impreso = 1 WHERE id = ?";
-    
-    db.query(sqlUpdate, [id], (err, result) => {
-        if (err) return res.status(500).json(err);
-        
-        // INSERTAR EN HISTORIAL
-        const sqlHistorial = "INSERT INTO historial (mascota_id, evento, detalle) VALUES (?, ?, ?)";
-        db.query(sqlHistorial, [id, "Producción Finalizada", "La placa fue fabricada y el QR está listo para entrega."], (hErr) => {
-            if (hErr) console.error("Error historial:", hErr);
-            return res.json({ message: "Impreso e historial registrado" });
-        });
-    });
+// Ruta pública para el QR
+app.get('/api/mascotas/public/:custom_id', async (req, res) => {
+    const { custom_id } = req.params;
+    try {
+        const result = await pool.query("SELECT * FROM mascotas WHERE custom_id = $1", [custom_id]);
+        if (result.rows.length === 0) return res.status(404).json({ message: "No encontrado" });
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json(err);
+    }
 });
 
-// 4. Cambiar estado + REGISTRO EN HISTORIAL
-// --- CAMBIAR ESTADO + REGISTRO EN HISTORIAL ---
-app.patch('/api/mascotas/:id/estado', (req, res) => {
-    const { id } = req.params;
-    const { estado, motivo } = req.body; // <--- Fíjate que recibas 'motivo'
-
-    db.query("UPDATE mascotas SET estado = ? WHERE id = ?", [estado, id], (err) => {
-        if (err) return res.status(500).json(err);
-        
-        // Insertamos en historial usando el motivo que viene de React
-        const sqlHistorial = "INSERT INTO historial (mascota_id, evento, detalle) VALUES (?, ?, ?)";
-        const detalleHistorial = motivo || `Cambio de estado a ${estado}`;
-        
-        db.query(sqlHistorial, [id, "Actualización de Estado", detalleHistorial], (hErr) => {
-            if (hErr) return res.status(500).json(hErr);
-            res.json({ message: "Actualizado correctamente" });
-        });
-    });
-});
-
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+    console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
 });
