@@ -148,6 +148,33 @@ app.get('/api/mascotas/public/:custom_id', async (req, res) => {
     }
 });
 
+// Ruta de Login
+app.post('/api/login', async (req, res) => {
+    const { usuario, password } = req.body;
+    try {
+        const result = await pool.query(
+            'SELECT nombre_completo, rol FROM usuarios WHERE nombre_usuario = $1 AND password = $2',
+            [usuario, password]
+        );
+
+        if (result.rows.length > 0) {
+            // Enviamos los datos que React necesita
+            res.json({
+                success: true,
+                user: {
+                    nombre: result.rows[0].nombre_completo,
+                    rol: result.rows[0].rol
+                }
+            });
+        } else {
+            res.status(401).json({ success: false, message: 'Credenciales inválidas' });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error en el servidor');
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
