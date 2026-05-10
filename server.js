@@ -162,6 +162,7 @@ app.post('/api/login', async (req, res) => {
             res.json({
                 success: true,
                 user: {
+                    id: result.rows[0].id,
                     nombre: result.rows[0].nombre_completo,
                     rol: result.rows[0].rol
                 }
