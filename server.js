@@ -189,6 +189,17 @@ app.get('/api/usuarios/buscar', async (req, res) => {
     }
 });
 
+app.post('/api/rastreo-prueba', async (req, res) => {
+    const { unidad, lat, lng, timestamp } = req.body;
+    try {
+        // Aquí podrías guardar en una tabla 'rastreo_vehiculos'
+        console.log(`[RASTREO] ${unidad}: ${lat}, ${lng} a las ${timestamp}`);
+        res.sendStatus(200);
+    } catch (err) {
+        res.status(500).send(err);
+    }
+});
+
 // En tu servidor Node.js
 // Ruta para obtener mascotas de un usuario específico
 app.get('/api/mascotas/usuario/:id', async (req, res) => {
