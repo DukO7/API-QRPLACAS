@@ -177,6 +177,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 // En tu servidor Node.js
+// Ruta para obtener mascotas de un usuario específico
 app.get('/api/mascotas/usuario/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -184,10 +185,10 @@ app.get('/api/mascotas/usuario/:id', async (req, res) => {
             'SELECT * FROM mascotas WHERE usuario_id = $1', 
             [id]
         );
-        res.json(result.rows);
+        res.json(result.rows); // Devuelve un array (aunque esté vacío)
     } catch (err) {
-        console.error(err);
-        res.status(500).send('Error al obtener mascotas del cliente');
+        console.error("Error al obtener mascotas del usuario:", err);
+        res.status(500).json({ error: "Error en el servidor" });
     }
 });
 
