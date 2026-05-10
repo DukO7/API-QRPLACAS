@@ -153,7 +153,7 @@ app.post('/api/login', async (req, res) => {
     const { usuario, password } = req.body;
     try {
         const result = await pool.query(
-            'SELECT nombre_completo, rol FROM usuarios WHERE nombre_usuario = $1 AND password = $2',
+            'SELECT nombre_completo, rol,id FROM usuarios WHERE nombre_usuario = $1 AND password = $2',
             [usuario, password]
         );
 
