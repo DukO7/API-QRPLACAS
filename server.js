@@ -176,6 +176,19 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+app.get('/api/usuarios/buscar', async (req, res) => {
+    const { q } = req.query; // 'q' es lo que el admin escribe
+    try {
+        const result = await pool.query(
+            'SELECT id, nombre_completo, contacto, direccion FROM usuarios WHERE nombre_completo ILIKE $1 LIMIT 5',
+            [`%${q}%`]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).send('Error al buscar usuarios');
+    }
+});
+
 // En tu servidor Node.js
 // Ruta para obtener mascotas de un usuario específico
 app.get('/api/mascotas/usuario/:id', async (req, res) => {
