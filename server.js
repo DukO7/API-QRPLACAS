@@ -193,25 +193,17 @@ app.get('/api/usuarios/buscar', async (req, res) => {
 
 // Ruta para recibir y guardar la ubicación
 app.post('/api/rastreo-prueba', async (req, res) => {
-    const { unidad, lat, lng } = req.body;
-
-    if (!unidad || !lat || !lng) {
-        return res.status(400).send("Faltan datos obligatorios");
-    }
-
+    const { unidad, lat, lng, precision } = req.body;
     try {
-        const query = `
-            INSERT INTO historial_vehiculos (unidad_id, latitud, longitud) 
-            VALUES ($1, $2, $3) RETURNING *`;
-        
-        const values = [unidad, lat, lng];
-        await pool.query(query, values);
-
-        console.log(`📍 Punto guardado para ${unidad}: ${lat}, ${lng}`);
-        res.status(201).json({ success: true });
+        // Asegúrate de que los nombres de las columnas coincidan con tu tabla
+        await pool.query(
+            'INSERT INTO historial_vehiculos (unidad_id, latitud, longitud) VALUES ($1, $2, $3)',
+            [String(unidad), lat, lng] // Forzamos String(unidad)
+        );
+        res.sendStatus(201);
     } catch (err) {
-        console.error("Error al guardar historial:", err);
-        res.status(500).send("Error interno del servidor");
+        console.error(err);
+        res.sendStatus(500);
     }
 });
 
@@ -220,18 +212,17 @@ app.get('/api/historial/:unidad', async (req, res) => {
     const { unidad } = req.params;
     
     try {
-        // Asegúrate de que unidad_id sea comparado con un string ($1)
-        // y que la columna en la DB sea VARCHAR o TEXT
+        // El ::text le dice a Postgres: "No intentes convertir esto a nada más"
         const query = `
             SELECT latitud, longitud, fecha_hora 
             FROM historial_vehiculos 
-            WHERE unidad_id = $1 
+            WHERE unidad_id::text = $1::text 
             ORDER BY fecha_hora ASC`;
             
         const result = await pool.query(query, [unidad]);
         res.json(result.rows);
     } catch (err) {
-        console.error("Error en el query:", err);
+        console.error("Error en el servidor:", err);
         res.status(500).json({ error: err.message });
     }
 });
