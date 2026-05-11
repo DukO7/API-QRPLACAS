@@ -189,14 +189,29 @@ app.get('/api/usuarios/buscar', async (req, res) => {
     }
 });
 
+
+
+// Ruta para recibir y guardar la ubicación
 app.post('/api/rastreo-prueba', async (req, res) => {
-    const { unidad, lat, lng, timestamp } = req.body;
+    const { unidad, lat, lng } = req.body;
+
+    if (!unidad || !lat || !lng) {
+        return res.status(400).send("Faltan datos obligatorios");
+    }
+
     try {
-        // Aquí podrías guardar en una tabla 'rastreo_vehiculos'
-        console.log(`[RASTREO] ${unidad}: ${lat}, ${lng} a las ${timestamp}`);
-        res.sendStatus(200);
+        const query = `
+            INSERT INTO historial_vehiculos (unidad_id, latitud, longitud) 
+            VALUES ($1, $2, $3) RETURNING *`;
+        
+        const values = [unidad, lat, lng];
+        await pool.query(query, values);
+
+        console.log(`📍 Punto guardado para ${unidad}: ${lat}, ${lng}`);
+        res.status(201).json({ success: true });
     } catch (err) {
-        res.status(500).send(err);
+        console.error("Error al guardar historial:", err);
+        res.status(500).send("Error interno del servidor");
     }
 });
 
