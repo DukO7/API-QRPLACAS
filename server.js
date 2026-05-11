@@ -215,18 +215,24 @@ app.post('/api/rastreo-prueba', async (req, res) => {
     }
 });
 
+// BUSCA ESTA RUTA EN TU BACKEND
 app.get('/api/historial/:unidad', async (req, res) => {
     const { unidad } = req.params;
+    
     try {
+        // Asegúrate de que unidad_id sea comparado con un string ($1)
+        // y que la columna en la DB sea VARCHAR o TEXT
         const query = `
             SELECT latitud, longitud, fecha_hora 
             FROM historial_vehiculos 
             WHERE unidad_id = $1 
             ORDER BY fecha_hora ASC`;
+            
         const result = await pool.query(query, [unidad]);
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: "Error al obtener historial" });
+        console.error("Error en el query:", err);
+        res.status(500).json({ error: err.message });
     }
 });
 
