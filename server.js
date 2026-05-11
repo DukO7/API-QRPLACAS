@@ -215,6 +215,21 @@ app.post('/api/rastreo-prueba', async (req, res) => {
     }
 });
 
+app.get('/api/historial/:unidad', async (req, res) => {
+    const { unidad } = req.params;
+    try {
+        const query = `
+            SELECT latitud, longitud, fecha_hora 
+            FROM historial_vehiculos 
+            WHERE unidad_id = $1 
+            ORDER BY fecha_hora ASC`;
+        const result = await pool.query(query, [unidad]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Error al obtener historial" });
+    }
+});
+
 // En tu servidor Node.js
 // Ruta para obtener mascotas de un usuario específico
 app.get('/api/mascotas/usuario/:id', async (req, res) => {
