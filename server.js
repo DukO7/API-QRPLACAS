@@ -191,38 +191,35 @@ app.get('/api/usuarios/buscar', async (req, res) => {
 
 
 
-// Ruta para recibir y guardar la ubicación
+// POST: Guardar ubicación
 app.post('/api/rastreo-prueba', async (req, res) => {
-    const { unidad, lat, lng, precision } = req.body;
+    const { unidad, lat, lng } = req.body;
     try {
-        // Asegúrate de que los nombres de las columnas coincidan con tu tabla
         await pool.query(
-            'INSERT INTO historial_vehiculos (unidad_id, latitud, longitud) VALUES ($1, $2, $3)',
-            [String(unidad), lat, lng] // Forzamos String(unidad)
+            'INSERT INTO historial_vehiculos (nombre_unidad, latitud, longitud) VALUES ($1, $2, $3)',
+            [String(unidad), lat, lng]
         );
         res.sendStatus(201);
     } catch (err) {
-        console.error(err);
-        res.sendStatus(500);
+        console.error("Error al insertar:", err);
+        res.status(500).send(err.message);
     }
 });
 
-// BUSCA ESTA RUTA EN TU BACKEND
+// GET: Obtener historial
 app.get('/api/historial/:unidad', async (req, res) => {
     const { unidad } = req.params;
-    
     try {
-        // El ::text le dice a Postgres: "No intentes convertir esto a nada más"
         const query = `
             SELECT latitud, longitud, fecha_hora 
             FROM historial_vehiculos 
-            WHERE unidad_id::text = $1::text 
+            WHERE nombre_unidad = $1 
             ORDER BY fecha_hora ASC`;
             
-        const result = await pool.query(query, [unidad]);
+        const result = await pool.query(query, [String(unidad)]);
         res.json(result.rows);
     } catch (err) {
-        console.error("Error en el servidor:", err);
+        console.error("Error al consultar:", err);
         res.status(500).json({ error: err.message });
     }
 });
