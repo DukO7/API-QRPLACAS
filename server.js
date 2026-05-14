@@ -211,13 +211,11 @@ app.post('/api/rastreo-prueba', async (req, res) => {
 app.get('/api/historial/:unidad', async (req, res) => {
     const { unidad } = req.params;
     try {
-        const query = `
-            SELECT latitud, longitud, fecha_hora 
-            FROM historial_vehiculos 
-            WHERE nombre_unidad = $1 
-            ORDER BY fecha_hora ASC`;
-            
-        const result = await pool.query(query, [String(unidad)]);
+        // AQUÍ: También debe decir unidad_id
+        const result = await pool.query(
+            'SELECT latitud, longitud, fecha_hora FROM historial_vehiculos WHERE unidad_id = $1 ORDER BY fecha_hora ASC',
+            [String(unidad)]
+        );
         res.json(result.rows);
     } catch (err) {
         console.error("Error al consultar:", err);
