@@ -192,34 +192,37 @@ app.get('/api/usuarios/buscar', async (req, res) => {
 
 
 // POST: Guardar ubicación
-app.post('/api/rastreo-prueba', async (req, res) => {
-    const { unidad, lat, lng } = req.body;
+// GET: Obtener historial por ID numérico
+app.get('/api/historial/:id', async (req, res) => {
+    const { id } = req.params;
+    
     try {
-        // AQUÍ: Asegúrate de que diga unidad_id (no nombre_unidad)
-        await pool.query(
-            'INSERT INTO historial_vehiculos (unidad_id, latitud, longitud) VALUES ($1, $2, $3)',
-            [String(unidad), lat, lng]
-        );
-        res.sendStatus(201);
-    } catch (err) {
-        console.error("Error al insertar:", err);
-        res.status(500).send(err.message);
-    }
-});
-
-// GET: Obtener historial
-app.get('/api/historial/:unidad', async (req, res) => {
-    const { unidad } = req.params;
-    try {
-        // AQUÍ: También debe decir unidad_id
-        const result = await pool.query(
-            'SELECT latitud, longitud, fecha_hora FROM historial_vehiculos WHERE unidad_id = $1 ORDER BY fecha_hora ASC',
-            [String(unidad)]
-        );
+        const query = `
+            SELECT latitud, longitud, fecha_hora 
+            FROM historial_vehiculos 
+            WHERE conductor_id = $1 
+            ORDER BY fecha_hora ASC`;
+            
+        // Convertimos el ID a número explícitamente
+        const result = await pool.query(query, [parseInt(id)]);
         res.json(result.rows);
     } catch (err) {
         console.error("Error al consultar:", err);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// POST: Guardar (Asegúrate de enviar el ID desde el celular)
+app.post('/api/rastreo-prueba', async (req, res) => {
+    const { conductor_id, unidad, lat, lng } = req.body;
+    try {
+        await pool.query(
+            'INSERT INTO historial_vehiculos (conductor_id, nombre_unidad, latitud, longitud) VALUES ($1, $2, $3, $4)',
+            [parseInt(conductor_id), unidad, lat, lng]
+        );
+        res.sendStatus(201);
+    } catch (err) {
+        res.status(500).send(err.message);
     }
 });
 
