@@ -195,8 +195,9 @@ app.get('/api/usuarios/buscar', async (req, res) => {
 app.post('/api/rastreo-prueba', async (req, res) => {
     const { unidad, lat, lng } = req.body;
     try {
+        // AQUÍ: Asegúrate de que diga unidad_id (no nombre_unidad)
         await pool.query(
-            'INSERT INTO historial_vehiculos (nombre_unidad, latitud, longitud) VALUES ($1, $2, $3)',
+            'INSERT INTO historial_vehiculos (unidad_id, latitud, longitud) VALUES ($1, $2, $3)',
             [String(unidad), lat, lng]
         );
         res.sendStatus(201);
