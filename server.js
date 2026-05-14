@@ -193,7 +193,8 @@ app.get('/api/usuarios/buscar', async (req, res) => {
 
 // POST: Guardar ubicación
 // GET: Obtener historial por ID numérico
-app.get('/api/historial/:id', async (req, res) => {
+// Cambiamos la ruta para que sea única: /api/gps/historial/:id
+app.get('/api/gps/historial/:id', async (req, res) => {
     const { id } = req.params;
     
     try {
@@ -203,11 +204,12 @@ app.get('/api/historial/:id', async (req, res) => {
             WHERE conductor_id = $1 
             ORDER BY fecha_hora ASC`;
             
-        // Convertimos el ID a número explícitamente
         const result = await pool.query(query, [parseInt(id)]);
+        
+        // Enviamos los datos asegurando que latitud y longitud no sean nulos
         res.json(result.rows);
     } catch (err) {
-        console.error("Error al consultar:", err);
+        console.error("Error al consultar GPS:", err);
         res.status(500).json({ error: err.message });
     }
 });
